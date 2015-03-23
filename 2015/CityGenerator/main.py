@@ -5,7 +5,7 @@ import math
 blockSize = [15, 15]
 buildingSize = [10, 5, 10]
 
-buildingList = []
+buildingList = []  # Lista di palazzi generati
 
 def createBuilding(position, blockSize, buildingSize):
     building = cmd.polyCube(sx=1, sy=1, sz=1, w=buildingSize[0], h=buildingSize[1], d=buildingSize[2])
