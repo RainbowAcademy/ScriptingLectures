@@ -5,6 +5,12 @@ import maya.OpenMaya as om
 
 
 def checkClosed(curves):
+	"""
+	Check if curves are closed
+
+	:param curves: curves to check
+	:return: None
+	"""
 	for c in curves:
 		state = cmd.getAttr(c + '.f')  # 0 Open, 1 Closed, 2 Periodic
 		if state != 1 and state != 2:
@@ -12,6 +18,12 @@ def checkClosed(curves):
 
 
 def checkIntersection(curves):
+	"""
+	Check if any curve intersect each other
+
+	:param curves: curves to check
+	:return: None
+	"""
 	for c in curves:
 		for i in range(0, len(curves)):
 			if c != curves[i]:
@@ -23,6 +35,12 @@ def checkIntersection(curves):
 
 
 def checkPlanar(curves):
+	"""
+	Check if curves are planar (they must have the same y value)
+
+	:param curves: curves to check
+	:return: None
+	"""
 	for i in range(1, len(curves)):
 		t = cmd.listRelatives(curves[i], type='transform', p=True)
 		t1 = cmd.listRelatives(curves[i-1], type='transform', p=True)
@@ -33,6 +51,13 @@ def checkPlanar(curves):
 
 
 def createShapeFromCurve(d, curve):
+	"""
+	Duplicate the curve and create a shape (with loft tool)
+
+	:param d: distance between curve copy
+	:param curve: curve that is used to create the shape
+	:return: resulting shape from loft tool
+	"""
 	cmd.select(curve)
 	copy1 = cmd.duplicate(st=True)
 	cmd.move(d, y=True, r=True)
@@ -50,6 +75,17 @@ def createShapeFromCurve(d, curve):
 
 
 def displacePointsInsideMesh(plane, mesh, height, sse, ssd):
+	"""
+	Select vertices of plane that are inside mesh and displace those vertices
+	(with amount height)
+
+	:param plane: object to displace
+	:param mesh: shape for select vertices to displace
+	:param height: height of displacement
+	:param sse: enable soft selection 0 False 1 True
+	:param ssd: soft select distance
+	:return: None
+	"""
 	cmd.selectMode(component=True)
 	cmd.softSelect(sse=sse, ssd=ssd)
 
@@ -60,13 +96,17 @@ def displacePointsInsideMesh(plane, mesh, height, sse, ssd):
 		vPosition = cmd.xform(v, query=True, translation=True, worldSpace=True)
 		if test_if_inside_mesh(mesh, vPosition):
 			cmd.move(height, y=True, r=True)
-			# cmd.polyMoveVertex(ty=height)
 
 	cmd.softSelect(sse=0)
 	cmd.selectMode(o=True)
 
 
 def resetVertices():
+	"""
+	Reset vertices of selected plane at y=0 (local space)
+
+	:return: None
+	"""
 	sel = cmd.ls(sl=True)
 	if len(sel) == 0:
 		raise Exception("Selezionare il piano!")
@@ -76,7 +116,55 @@ def resetVertices():
 	cmd.selectMode(o=True)
 
 
+def testIfInsideCurve(point, curve, direction):
+	p1 = point
+	pTmp = (direction[0]*10000, direction[1]*10000, direction[2]*10000)
+	p2 = (p1[0]+pTmp[0], p1[1]+pTmp[1], p1[2]+pTmp[2])
+	segment = cmd.curve(p=[p1, p2], d=1)
+	node = cmd.curveIntersect(segment, curve)
+	cmd.delete(segment)
+	if node:
+		print str(node)
+		return (len(node) / 3) % 2 == 1
+	else:
+		return False
+	# return (len(intersection) / 3) % 2 == 1
+
+
+def tmp():
+	curves = cmd.ls(type='nurbsCurve')
+
+	sel = cmd.ls(sl=True)
+	if len(sel) == 0:
+		raise Exception("Selezionare il piano!")
+	print '--------- Selection is: ' + sel[0] + ' ---------'
+
+	cmd.selectMode(component=True)
+	count = 1
+	for c in curves:
+		vtxNumber = len(cmd.getAttr(sel[0]+'.vtx[:]'))
+		for i in range(0, vtxNumber):
+			v = sel[0]+'.vtx[%d]' % i
+			cmd.select(v, r=True)
+			vPosition = cmd.xform(v, query=True, translation=True, worldSpace=True)
+			if testIfInsideCurve(vPosition, c, (1, 0, 0)):
+				cmd.move(3, y=True, r=True)
+
+		cmd.selectMode(o=True)
+		print "Terminato displacement livello " + str(count)
+		count += 1
+
+
 def test_if_inside_mesh(msh, point=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0)):
+	"""
+	Finds any intersection of a ray starting at raySource and travelling
+	in rayDirection with the mesh.
+
+	:param msh: shape to intersect
+	:param point: point to test if is inside the mesh
+	:param direction: unit vector for raycasting
+	:return: True if point is inside mesh (check
+	"""
 	sel = om.MSelectionList()
 	dag = om.MDagPath()
 
@@ -89,11 +177,8 @@ def test_if_inside_mesh(msh, point=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0)):
 	direction = om.MFloatVector(*direction)
 	farray = om.MFloatPointArray()
 
-	"""
-	Finds any intersection of a ray starting at raySource and travelling
-	in rayDirection with the mesh.
-	See docs here ---> http://download.autodesk.com/us/maya/2011help/API/class_m_fn_mesh.html#4ce7d38f9201f33c48f49e6068d07c18
-	"""
+	# See docs here:
+	# http://download.autodesk.com/us/maya/2011help/API/class_m_fn_mesh.html#4ce7d38f9201f33c48f49e6068d07c18
 	mesh.allIntersections(
 		point, direction,
 		None, None,
@@ -110,6 +195,16 @@ def test_if_inside_mesh(msh, point=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0)):
 
 
 def CL_Displace(height, iUseSoftSel=0, ssRadius=0):
+	"""
+	Main function to perform ContourLines Displace. Keep all curves in the scene
+	and displace the selected plane depends on the shape of that curves.
+	Curves must be drawn from bigger to smaller (lower displace to higher)
+
+	:param height: height of displacement
+	:param iUseSoftSel: use soft selection 0 False 1 True
+	:param ssRadius: soft selection radius
+	:return: None
+	"""
 	curves = cmd.ls(type='nurbsCurve')
 	checkClosed(curves)
 	checkPlanar(curves)
@@ -132,6 +227,16 @@ def CL_Displace(height, iUseSoftSel=0, ssRadius=0):
 
 
 def displacePointsInsideMeshSM(plane, mesh, height, fRadius):
+	"""
+	Same function as displacePointsInsideMesh, but use soft modification
+	instead of soft selection
+
+	:param plane: object to displace
+	:param mesh: shape for select vertices to displace
+	:param height: height of displacement
+	:param fRadius: soft modification falloff radius
+	:return: None
+	"""
 	cmd.selectMode(component=True)
 
 	vtxNumber = len(cmd.getAttr(plane+'.vtx[:]'))
@@ -141,12 +246,20 @@ def displacePointsInsideMeshSM(plane, mesh, height, fRadius):
 		if test_if_inside_mesh(mesh, vPosition):
 			cmd.select(v, add=True)
 
-	cmd.softMod(rel=True, fas=True, fr=fRadius)
+	cmd.softMod(rel=True, fas=True, fr=fRadius, fm=False)
 	cmd.move(height, y=True, r=True)
 	cmd.selectMode(o=True)
 
 
 def CL_Displace_SM(height, fRadius=5):
+	"""
+	Same function as CL_Displace, but use displacePointsInsideMeshSM
+	instead of displacePointsInsideMesh
+
+	:param height: height of displacement
+	:param fRadius: soft modification radius
+	:return: None
+	"""
 	curves = cmd.ls(type='nurbsCurve')
 	checkClosed(curves)
 	checkPlanar(curves)
