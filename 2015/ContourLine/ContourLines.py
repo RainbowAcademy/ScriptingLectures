@@ -89,6 +89,11 @@ def test_if_inside_mesh(msh, point=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0)):
 	direction = om.MFloatVector(*direction)
 	farray = om.MFloatPointArray()
 
+	"""
+	Finds any intersection of a ray starting at raySource and travelling
+	in rayDirection with the mesh.
+	See docs here ---> http://download.autodesk.com/us/maya/2011help/API/class_m_fn_mesh.html#4ce7d38f9201f33c48f49e6068d07c18
+	"""
 	mesh.allIntersections(
 		point, direction,
 		None, None,
@@ -120,7 +125,44 @@ def CL_Displace(height, iUseSoftSel=0, ssRadius=0):
 		shape = createShapeFromCurve(height*i, c)
 		displacePointsInsideMesh(sel[0], shape, height, iUseSoftSel, ssRadius)
 		cmd.delete(shape)
-		print "Terminato displce livello " + str(i)
+		print "Terminato displacement livello " + str(i)
+		i += 1
+
+	cmd.polyTriangulate(sel[0])
+
+
+def displacePointsInsideMeshSM(plane, mesh, height, fRadius):
+	cmd.selectMode(component=True)
+
+	vtxNumber = len(cmd.getAttr(plane+'.vtx[:]'))
+	for i in range(0, vtxNumber):
+		v = plane+'.vtx[%d]' % i
+		vPosition = cmd.xform(v, query=True, translation=True, worldSpace=True)
+		if test_if_inside_mesh(mesh, vPosition):
+			cmd.select(v, add=True)
+
+	cmd.softMod(rel=True, fas=True, fr=fRadius)
+	cmd.move(height, y=True, r=True)
+	cmd.selectMode(o=True)
+
+
+def CL_Displace_SM(height, fRadius=5):
+	curves = cmd.ls(type='nurbsCurve')
+	checkClosed(curves)
+	checkPlanar(curves)
+	checkIntersection(curves)
+
+	sel = cmd.ls(sl=True)
+	if len(sel) == 0:
+		raise Exception("Selezionare il piano!")
+	print '--------- Selection is: ' + sel[0] + ' ---------'
+
+	i = 1
+	for c in curves:
+		shape = createShapeFromCurve(height*i, c)
+		displacePointsInsideMeshSM(sel[0], shape, height, fRadius)
+		cmd.delete(shape)
+		print "Terminato displacement livello " + str(i)
 		i += 1
 
 	cmd.polyTriangulate(sel[0])
