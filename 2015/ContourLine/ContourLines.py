@@ -118,17 +118,21 @@ def resetVertices():
 
 def testIfInsideCurve(point, curve, direction):
 	p1 = point
-	pTmp = (direction[0]*10000, direction[1]*10000, direction[2]*10000)
+	pTmp = (direction[0]*1000, direction[1]*1000, direction[2]*1000)
 	p2 = (p1[0]+pTmp[0], p1[1]+pTmp[1], p1[2]+pTmp[2])
 	segment = cmd.curve(p=[p1, p2], d=1)
-	node = cmd.curveIntersect(segment, curve)
-	cmd.delete(segment)
+	node = cmd.curveIntersect(segment, curve, ud=True, d=(0, 1, 0), ch=True)
+
 	if node:
-		print str(node)
-		return (len(node) / 3) % 2 == 1
+		intCurve1 = cmd.getAttr(node+'.parameter1')
+		numOfIntersection = len(intCurve1[0])
 	else:
-		return False
-	# return (len(intersection) / 3) % 2 == 1
+		numOfIntersection = 0
+		print 'Node e\' NoneType!'
+
+	cmd.delete(segment)
+	cmd.delete(node)
+	return numOfIntersection % 2 == 1
 
 
 def tmp():
@@ -145,14 +149,14 @@ def tmp():
 		vtxNumber = len(cmd.getAttr(sel[0]+'.vtx[:]'))
 		for i in range(0, vtxNumber):
 			v = sel[0]+'.vtx[%d]' % i
-			cmd.select(v, r=True)
 			vPosition = cmd.xform(v, query=True, translation=True, worldSpace=True)
 			if testIfInsideCurve(vPosition, c, (1, 0, 0)):
-				cmd.move(3, y=True, r=True)
+				cmd.move(3, v, y=True, r=True)
 
-		cmd.selectMode(o=True)
 		print "Terminato displacement livello " + str(count)
 		count += 1
+
+	cmd.selectMode(o=True)
 
 
 def test_if_inside_mesh(msh, point=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0)):
@@ -278,4 +282,34 @@ def CL_Displace_SM(height, fRadius=5):
 		print "Terminato displacement livello " + str(i)
 		i += 1
 
+	cmd.polyTriangulate(sel[0])
+
+
+def CL_Displace_noShape(height, sse=0, ssd=0):
+	curves = cmd.ls(type='nurbsCurve')
+	checkClosed(curves)
+	checkPlanar(curves)
+	checkIntersection(curves)
+
+	sel = cmd.ls(sl=True)
+	if len(sel) == 0:
+		raise Exception("Selezionare il piano!")
+	print '--------- Selection is: ' + sel[0] + ' ---------'
+
+	cmd.selectMode(component=True)
+	cmd.softSelect(sse=sse, ssd=ssd)
+	count = 1
+	for c in curves:
+		vtxNumber = len(cmd.getAttr(sel[0]+'.vtx[:]'))
+		for i in range(0, vtxNumber):
+			v = sel[0]+'.vtx[%d]' % i
+			vPosition = cmd.xform(v, query=True, translation=True, worldSpace=True)
+			if testIfInsideCurve(vPosition, c, (1, 0, 0)):
+				cmd.move(height, v, y=True, r=True)
+
+		print "Terminato displacement livello " + str(count)
+		count += 1
+
+	cmd.softSelect(sse=0)
+	cmd.selectMode(o=True)
 	cmd.polyTriangulate(sel[0])
