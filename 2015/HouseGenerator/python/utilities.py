@@ -20,10 +20,9 @@ class Error(Exception):
 		self.msg = msg
 
 class constructionError(Error):
-	def __init__(self, className):
-		msg = "There is an error in the construction of the " + str(className) + " class."
+	def __init__(self, message):
+		msg = "There is an error in the construction __init__. \n "+message
 		super(Error, self).__init__(msg)
-		self.className = className
 
 def toStr(s):
 	if type(s) is list:

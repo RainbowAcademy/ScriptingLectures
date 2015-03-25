@@ -1,6 +1,7 @@
 __author__ = 'f.forti'
 
 import maya.cmds as cmd
+import maya.mel as mel
 import copy
 import utilities as ut
 
@@ -11,6 +12,7 @@ class BoundingBox(object):
 		self.min = None
 		self.max = None
 		self.volume = None
+		self.mayaBB = None
 
 		keys = kwargs.keys()
 		if "extract" in keys:
@@ -18,6 +20,7 @@ class BoundingBox(object):
 			self.min = mayabb[0:3]
 			self.max = mayabb[3:6]
 			self.dimension = 3
+			self.mayaBB = kwargs["extract"]
 		elif "min" in keys and "max" in keys:
 			self.min = kwargs["min"]
 			self.max = kwargs["max"]
@@ -49,6 +52,12 @@ class BoundingBox(object):
 			self.max.append(sortedComp[-1])
 		return [self.min, self.max]
 
+	def updateFromMayaBB(self):
+		if self.mayaBB is not None:
+			mayabb = cmd.exactWorldBoundingBox(self.mayaBB)
+			self.min = mayabb[0:3]
+			self.max = mayabb[3:6]
+			self.dimension = 3
 
 	def retrieveVertex(self):
 		vertex = []
@@ -92,14 +101,36 @@ class BoundingBox(object):
 		if self.dimension == 2:
 			width = self.__len__(0)
 			depth = self.__len__(1)
-			self.mayaBB = cmd.polyPlane( w=width, h=depth, n="BB2D_0")
+			self.mayaBB = cmd.polyPlane( w=width, h=depth, n="BB2D_0")[0]
 			cmd.move(self.min[0]+width/2, 0, self.min[1]+depth/2, self.mayaBB, absolute=True)
 		elif self.dimension == 3:
 			width = self.__len__(0)
 			height = self.__len__(1)
 			depth = self.__len__(2)
-			self.mayaBB = cmd.polyCube(w=width, h=height, d=depth, n="BB_0")
+			self.mayaBB = cmd.polyCube(w=width, h=height, d=depth, n="BB_0")[0]
 			cmd.move(self.min[0]+width/2, self.min[1]+height/2, self.min[2]+depth/2, self.mayaBB, absolute=True)
+
+	def undraw(self):
+		cmd.delete(self.mayaBB)
+		self.mayaBB = None
+
+	def subtract(self, other):
+		if self.mayaBB is not None and other.mayaBB is not None:
+			#separate
+			cmd.polyChipOff(self.mayaBB+'.f[0:1]', ch=0, kft=1, dup=0, off=0)
+			tempBBPieces = cmd.polySeparate(self.mayaBB, ch=0)
+			#bool
+			cutter = cmd.duplicate(other.mayaBB)[0]
+			tempBBPieces[0] = mel.eval('polyCBoolOp -op 2 -ch 0 -classification 2 %s %s' % (tempBBPieces[0], cutter))
+			cutter = cmd.duplicate(other.mayaBB)[0]
+			tempBBPieces[1] = mel.eval('polyCBoolOp -op 2 -ch 0 -classification 2 %s %s' % (tempBBPieces[1], cutter))
+			#combine
+			self.mayaBB = cmd.polyUnite(tempBBPieces[0], tempBBPieces[1], ch=0, n=self.mayaBB)[0]
+
+	def __sub__(self, other):
+		copied = copy.copy(self)
+		copied.subtract(other)
+		return copied
 
 	def __len__(self, l=None):
 		if l is not None:
@@ -130,7 +161,7 @@ class BoundingBox(object):
 			lengths = [(d, self.__len__(d)) for d in between]
 			return max(lengths, key=lambda x: x[1])[0]
 
-		lengths = [self.__len__(d) for d in self.dimension]
+		lengths = [self.__len__(d) for d in range(self.dimension)]
 		return max(xrange(self.dimension), key=lengths.__getitem__)
 
 	def __str__(self):
